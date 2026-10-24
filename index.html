@@ -152,8 +152,8 @@ const COL={rested:1,thrill:2,talented:1,guide:2,alert:3,medicine:4,flier:2,
  gourmand:1,quick:2,reinforce:3,perm:1,honor:3,diplomat:4,reagent:2};
 function build(){
   const el=$("trees");el.innerHTML="";
-  for(let t=0;t<3;t++){
-    const box=document.createElement("div");box.className="tree";
+  for(const t of [1,0,2]){ // display order: Professions, Adventure, Resourcefulness
+    const box=document.createElement("div");box.className="tree";box.dataset.t=t;
     box.innerHTML=`<h2><b></b><span></span></h2>`;
     const g=document.createElement("div");g.className="grid";
     [0,5,10].forEach((row,ri)=>{
@@ -178,7 +178,7 @@ function render(){
   $("bReset").textContent=U.reset;
   $("bEn").classList.toggle("on",lang==="en");$("bRu").classList.toggle("on",lang==="ru");
   $("note").textContent=U.note;
-  document.querySelectorAll(".tree").forEach((box,t)=>{
+  document.querySelectorAll(".tree").forEach(box=>{const t=+box.dataset.t;
     box.querySelector("b").textContent=U.trees[t];
     box.querySelector("span").textContent=P.filter(p=>p.t===t).reduce((s,p)=>s+ranks[p.id],0)+(lang==="ru"?" оч.":" pts");
   });
