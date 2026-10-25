@@ -41,7 +41,23 @@ button:hover{border-color:var(--gold)}button.on{background:#3b2f14;border-color:
 #tip em{font-style:normal;color:var(--dim)}#tip em.cur{color:var(--ok);font-weight:bold}
 #tip .h{margin-top:8px;color:var(--dim);font-size:12px}
 .note{max-width:980px;margin:14px auto 0;color:var(--dim);font-size:12px}
-@media(max-width:760px){.trees{grid-template-columns:1fr}.top,.ctl{flex-wrap:wrap}.pts{min-width:0}}
+.tabs{max-width:980px;margin:0 auto 12px;display:flex;gap:6px}
+.tabs button{padding:8px 18px;font-size:15px}
+.cards{max-width:980px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.card,.zbox{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px}
+.card h3{margin:0 0 6px;color:var(--gold);font-size:16px;display:flex;justify-content:space-between}
+.card h3 b{color:var(--ok)}
+.card p{margin:0 0 6px;color:var(--dim);font-size:13px}
+.card ul{margin:0;padding-left:18px}.card li{margin:3px 0}
+.sec{max-width:980px;margin:22px auto 8px;color:var(--gold);font-size:18px}
+.lead{max-width:980px;margin:0 auto 10px;color:var(--txt)}
+.zones{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.zbox h3{margin:0 0 8px;color:var(--gold);font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:4px;padding:3px 8px;background:#0c0a07;font-size:13px}
+.chip b{color:var(--dim);font-weight:normal;margin-left:4px}
+.chip.new{border-color:var(--ok);color:var(--ok)}
+@media(max-width:760px){.cards,.zones{grid-template-columns:1fr}.trees{grid-template-columns:1fr}.top,.ctl{flex-wrap:wrap}.pts{min-width:0}}
 </style>
 </head>
 <body>
@@ -53,8 +69,12 @@ button:hover{border-color:var(--gold)}button.on{background:#3b2f14;border-color:
     <button id="bEn">EN</button><button id="bRu">RU</button>
   </div>
 </div>
+<div class="tabs"><button id="tabCalc"></button><button id="tabSrc"></button></div>
+<div id="viewCalc">
 <div class="trees" id="trees"></div>
 <div class="note" id="note"></div>
+</div>
+<div id="viewSrc" hidden></div>
 <div id="tip"></div>
 
 <script>
@@ -115,13 +135,13 @@ const P = [
 const BY = Object.fromEntries(P.map(p=>[p.id,p]));
 
 const UI = {
- en:{title:"WoW Forever — Legacy Perks Calculator",pts:"Points spent",reset:"Reset all",
+ en:{tabCalc:"Perk calculator",tabSrc:"How to earn points",title:"WoW Forever — Legacy Perks Calculator",pts:"Points spent",reset:"Reset all",
   trees:["Adventure","Professions","Resourcefulness"],rank:"Rank",
   tier:"Requires {n} points in earlier rows of {tree}",dep:"Requires {p} points in {name}",
   hint:"Left click: add · Right click / Shift+click / long press: remove",
   note:"Legacy Points are earned account-wide (up to 65); each character can spend up to 16 at launch. Rows unlock by points spent in the earlier rows of the same tree. Language switching never changes your spent points. Icons load from the Wowhead CDN (backup: Talents Forever); if one is missing, an emoji is shown instead.",
   confirm:"Reset all spent points?"},
- ru:{title:"WoW Forever — калькулятор перков Legacy",pts:"Потрачено очков",reset:"Сбросить всё",
+ ru:{tabCalc:"Калькулятор перков",tabSrc:"За что дают очки",title:"WoW Forever — калькулятор перков Legacy",pts:"Потрачено очков",reset:"Сбросить всё",
   trees:["Приключения","Профессии","Находчивость"],rank:"Ранг",
   tier:"Нужно {n} очков в предыдущих рядах: {tree}",dep:"Нужно {p} очк. в перке «{name}»",
   hint:"ЛКМ: добавить · ПКМ / Shift+клик / долгое нажатие: убрать",
@@ -129,8 +149,60 @@ const UI = {
   confirm:"Сбросить все вложенные очки?"}
 };
 
-let lang="en", ranks={};
-try{const s=JSON.parse(localStorage.getItem("wfLegacy")||"{}");if(s.l)lang=s.l;if(s.r)ranks=s.r}catch(e){}
+// ---- "How to earn points" tab data. Each text is [English, Russian] ----
+const CATS=[
+ {p:27,n:["Class levels","Уровни классов"],d:["First time you reach levels 25, 45 and 60 on each class (3 × 9 classes).","Впервые достигнуть 25, 45 и 60 уровня на каждом классе (3 × 9 классов)."],
+  l:[["Druid, Hunter, Mage, Paladin, Priest, Rogue, Shaman, Warlock, Warrior","Друид, охотник, маг, паладин, жрец, разбойник, шаман, чернокнижник, воин"],["Level 25 · 45 · 60 on every class","Уровни 25 · 45 · 60 на каждом классе"]]},
+ {p:18,n:["Crafting skill","Ремёсла"],d:["First time you reach skill 150, 225 and 300 in each crafting profession (3 × 6).","Впервые достигнуть навыка 150, 225 и 300 в каждой производственной профессии (3 × 6)."],
+  l:[["Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring","Алхимия, кузнечное дело, наложение чар, инженерное дело, кожевничество, портняжное дело"],["Gathering, Cooking, Fishing, First Aid give no points","Сбор ресурсов, кулинария, рыбная ловля и первая помощь очков не дают"]]},
+ {p:12,n:["PvP","PvP"],d:["Ranks, Field of Honor weeks and battleground reputation.","Звания, недели Поля Чести и репутация полей боя."],
+  l:[["PvP ranks 3, 7, 10, 13 and 14 (5 points)","PvP-звания 3, 7, 10, 13 и 14 (5 очков)"],["Field of Honor journey: weeks 4, 7 and 10 (3 points)","«Путь» Поля Чести: недели 4, 7 и 10 (3 очка)"],["Exalted with Alterac Valley, Arathi Basin, Warsong Gulch and Darkspear Islands (4 points)","Превознесение у Альтеракской долины, Низины Арати, Ущелья Песни Войны и Островов Тёмного Копья (4 очка)"]]},
+ {p:3,n:["Dungeons","Подземелья"],d:["Kill the final boss of every dungeon in the level range.","Убить финального босса каждого подземелья в диапазоне уровней."],
+  l:[["Novice Spelunker: all dungeons level 15–25","Новичок-спелеолог: все подземелья 15–25 уровня"],["Experienced Spelunker: all dungeons level 26–45","Опытный спелеолог: все подземелья 26–45 уровня"],["Master Spelunker: all dungeons level 46–60","Мастер-спелеолог: все подземелья 46–60 уровня"]]},
+ {p:3,n:["Raids","Рейды"],d:["Raids open on December 9, after launch.","Рейды откроются 9 декабря, после старта."],
+  l:[["Onyxia's Lair: Onyxia","Логово Ониксии: Ониксия"],["The Barrow Deeps: all 8 bosses","Глубины Курганов: все 8 боссов"],["Hyjal Summit: all 13 bosses","Вершина Хиджала: все 13 боссов"]]},
+ {p:2,n:["Exploration & quests","Исследование и квесты"],d:["One-time world challenges.","Разовые мировые достижения."],
+  l:[["Explorer: uncover the map of all 43 zones on one character (list below)","Исследователь: открыть карту всех 43 зон на одном персонаже (список ниже)"],["Lord Valthalak Laid to Rest: finish the Lord Valthalak dungeon set questline","«Лорд Валтхалак упокоен»: пройти цепочку квестов на сет Лорда Валтхалака"]]}
+];
+// [English, Russian, map areas, isNew]
+const ZEK=[["Alterac Mountains","Альтеракские горы",15],["Arathi Highlands","Предгорья Арати",16],["Badlands","Бесплодные земли",14],["Blasted Lands","Выжженные земли",9],["Burning Steppes","Пылающие степи",10],["Deadwind Pass","Перевал Мёртвого Ветра",3],["Dun Morogh","Дун Морог",18],["Duskwood","Сумеречный лес",13],["Eastern Plaguelands","Восточные Чумные земли",22],["Elwynn Forest","Элвиннский лес",12],["Hillsbrad Foothills","Предгорья Хилсбрада",12],["Loch Modan","Лок Модан",11],["Redridge Mountains","Красногорье",11],["Riverglades","Речные луга",12,1],["Searing Gorge","Тлеющее ущелье",7],["Silverpine Forest","Серебряный бор",15],["Stranglethorn Vale","Тернистая долина",27],["Swamp of Sorrows","Болото Печали",11],["The Hinterlands","Внутренние земли",14],["Tirisfal Glades","Тирисфальские леса",16],["Western Plaguelands","Западные Чумные земли",13],["Westfall","Западный Край",14],["Wetlands","Болотина",15]];
+const ZKA=[["Ashenvale","Ясеневый лес",18],["Azshara","Азшара",19],["Darkshore","Тёмные берега",9],["Desolace","Пустоши",15],["Durotar","Дуротар",11],["Dustwallow Marsh","Пыльные топи",7],["Felwood","Оскверненный лес",12],["Feralas","Фералас",16],["Moonglade","Лунная поляна",1],["Mount Hyjal","Гора Хиджал",9,1],["Mulgore","Мулгор",14],["Shen'dralas","Шен'драс",6,1],["Silithus","Силитус",6],["Stonetalon Mountains","Когтистые горы",11],["Tanaris","Танарис",20],["Teldrassil","Тельдрассил",11],["The Barrens","Степи",25],["Thousand Needles","Тысяча Игл",9],["Un'Goro Crater","Кратер Ун'Горо",7],["Winterspring","Зимние Ключи",13]];
+const REWARDS=[[15,"Replica Ironforge Air Rifle (toy)","Копия воздушного ружья Стальгорна (игрушка)"],[25,"Spectral Bear Cub (pet)","Призрачный медвежонок (питомец)"],[40,"Spectral Bear Tabard (tabard)","Накидка призрачного медведя (гербовая накидка)"],[55,"Reins of the Spectral Bear (mount)","Поводья призрачного медведя (скакун)"]];
+
+const SU={en:{head:"Where Legacy Points come from",lead:"There are 65 one-time challenges worth 1 point each, shared by all non-Hardcore characters on your account. The first point opens the Legacy panel (Y). Each character can spend up to 16 points at launch, and one character alone can earn 29, so alts are not required.",
+ unlock:"The first point comes from any of: level 25 on any character, skill 150 in a crafting profession, or exploring the whole world map.",
+ exp:"Exploration: which locations are required",
+ expLead:"The Explorer challenge needs the achievement Explore Azeroth: uncover every map area of all 43 zones of the Eastern Kingdoms and Kalimdor on one character. Number = map areas to uncover.",
+ ek:"Eastern Kingdoms",ka:"Kalimdor",newz:"new zone",tot:"zones",ar:"map areas",
+ noZ:"Zephras Isle is not part of it. Zone names marked as new are Forever-only zones.",
+ rew:"Collection rewards",rewLead:"Unlocked by total points earned, spent or not (up to 65).",pts:"points"},
+ ru:{head:"За что дают очки Legacy",lead:"Всего 65 разовых испытаний по 1 очку, общих для всех персонажей аккаунта вне режима Hardcore. Первое очко открывает окно Legacy (клавиша Y). На старте каждый персонаж может потратить до 16 очков, а один персонаж способен заработать 29, так что альты не нужны.",
+ unlock:"Первое очко даёт любое из: 25 уровень на любом персонаже, навык 150 в производственной профессии или исследование всей карты мира.",
+ exp:"Исследование: какие локации нужны",
+ expLead:"Для испытания «Исследователь» нужно достижение «Исследуйте Азерот»: открыть все области карты во всех 43 зонах Восточных Королевств и Калимдора на одном персонаже. Число — количество областей карты.",
+ ek:"Восточные Королевства",ka:"Калимдор",newz:"новая зона",tot:"зон",ar:"областей карты",
+ noZ:"Остров Зефрас в список не входит. Зоны с пометкой «новая» есть только в Forever. Русские названия новых зон неофициальные.",
+ rew:"Награды коллекции",rewLead:"Открываются по общему числу заработанных очков, потраченных или нет (до 65).",pts:"очков"}};
+
+function renderSrc(){
+  const L=lang==="en"?0:1,T=SU[lang],pick=a=>a[L];
+  const chips=a=>a.map(z=>`<span class="chip${z[3]?" new":""}">${z[L]}<b>${z[2]}</b>${z[3]?` · ${T.newz}`:""}</span>`).join("");
+  const sum=a=>a.reduce((s,z)=>s+z[2],0);
+  const zw=n=>lang==="ru"?((n%10===1&&n%100!==11)?"зона":(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?"зоны":"зон"):T.tot;
+  $("viewSrc").innerHTML=
+   `<h2 class="sec" style="margin-top:0">${T.head}</h2><p class="lead">${T.lead}</p><p class="lead" style="color:var(--dim)">${T.unlock}</p>
+    <div class="cards">${CATS.map(c=>`<div class="card"><h3>${pick(c.n)}<b>+${c.p}</b></h3><p>${pick(c.d)}</p><ul>${c.l.map(x=>`<li>${pick(x)}</li>`).join("")}</ul></div>`).join("")}</div>
+    <h2 class="sec">${T.exp}</h2><p class="lead">${T.expLead}</p>
+    <div class="zones"><div class="zbox"><h3>${T.ek} — ${ZEK.length} ${zw(ZEK.length)}, ${sum(ZEK)} ${T.ar}</h3><div class="chips">${chips(ZEK)}</div></div>
+    <div class="zbox"><h3>${T.ka} — ${ZKA.length} ${zw(ZKA.length)}, ${sum(ZKA)} ${T.ar}</h3><div class="chips">${chips(ZKA)}</div></div></div>
+    <p class="note" style="margin-top:8px">${T.noZ}</p>
+    <h2 class="sec">${T.rew}</h2><p class="lead">${T.rewLead}</p>
+    <div class="cards" style="grid-template-columns:repeat(4,1fr)">${REWARDS.map(r=>`<div class="card"><h3>${r[0]} ${T.pts}</h3><p style="margin:0;color:var(--txt)">${r[L+1]}</p></div>`).join("")}</div>
+    <p class="note">${lang==="ru"?"Источники: Blizzard (Get to Know the WoW: Forever Legacy System), Classic WoW Forever, MmonsteR. Данные беты, возможны изменения до релиза.":"Sources: Blizzard (Get to Know the WoW: Forever Legacy System), Classic WoW Forever, MmonsteR. Beta data, may change before launch."}</p>`;
+}
+
+let lang="en", tab="calc", ranks={};
+try{const s=JSON.parse(localStorage.getItem("wfLegacy")||"{}");if(s.l)lang=s.l;if(s.t)tab=s.t;if(s.r)ranks=s.r}catch(e){}
 P.forEach(p=>{ranks[p.id]=Math.min(ranks[p.id]||0,p.max)});
 
 const total=r=>P.reduce((s,p)=>s+r[p.id],0);
@@ -143,7 +215,7 @@ const valid=r=>total(r)<=MAX_POINTS&&P.every(p=>r[p.id]===0||okReq(p,r));
 const canAdd=p=>ranks[p.id]<p.max&&total(ranks)<MAX_POINTS&&okReq(p,ranks);
 const canRemove=p=>{if(ranks[p.id]<1)return false;const r={...ranks,[p.id]:ranks[p.id]-1};return valid(r)};
 
-function save(){try{localStorage.setItem("wfLegacy",JSON.stringify({l:lang,r:ranks}))}catch(e){}}
+function save(){try{localStorage.setItem("wfLegacy",JSON.stringify({l:lang,t:tab,r:ranks}))}catch(e){}}
 const $=id=>document.getElementById(id);
 
 // column inside the tree grid (1-4); dependents sit directly under their prerequisite
@@ -174,6 +246,11 @@ function build(){
 function render(){
   document.documentElement.lang=lang;const U=UI[lang];
   document.title=U.title;$("title").textContent=U.title;
+  $("tabCalc").textContent=U.tabCalc;$("tabSrc").textContent=U.tabSrc;
+  $("tabCalc").classList.toggle("on",tab==="calc");$("tabSrc").classList.toggle("on",tab==="src");
+  $("viewCalc").hidden=tab!=="calc";$("viewSrc").hidden=tab!=="src";
+  $("pts").style.visibility=$("bReset").style.visibility=tab==="calc"?"visible":"hidden";
+  if(tab==="src")renderSrc();
   $("pts").innerHTML=`${U.pts}: <b>${total(ranks)}</b> / ${MAX_POINTS}`;
   $("bReset").textContent=U.reset;
   $("bEn").classList.toggle("on",lang==="en");$("bRu").classList.toggle("on",lang==="ru");
@@ -233,6 +310,8 @@ trees.addEventListener("touchstart",e=>{const n=e.target.closest(".node");if(!n)
   lp=setTimeout(()=>{lpDone=true;act(n,true)},500)},{passive:true});
 ["touchend","touchmove","touchcancel"].forEach(ev=>trees.addEventListener(ev,()=>clearTimeout(lp),{passive:true}));
 trees.addEventListener("click",e=>{if(lpDone){e.stopImmediatePropagation();lpDone=false}},true);
+$("tabCalc").onclick=()=>{tab="calc";render()};
+$("tabSrc").onclick=()=>{tab="src";tip.style.display="none";render()};
 $("bReset").onclick=()=>{if(total(ranks)===0||confirm(UI[lang].confirm)){P.forEach(p=>ranks[p.id]=0);render()}};
 $("bEn").onclick=()=>{lang="en";render()};   // language only changes labels; `ranks` is untouched
 $("bRu").onclick=()=>{lang="ru";render()};
