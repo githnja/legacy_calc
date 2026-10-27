@@ -44,6 +44,12 @@ button:hover{border-color:var(--gold)}button.on{background:#3b2f14;border-color:
 #tip em{font-style:normal;color:var(--dim)}#tip em.cur{color:var(--ok);font-weight:bold}
 #tip .h{margin-top:8px;color:var(--dim);font-size:12px}
 .note{max-width:980px;margin:14px auto 0;color:var(--dim);font-size:12px}
+.share{max-width:980px;margin:14px auto 0;background:var(--panel);border:1px dashed var(--gold);border-radius:6px;padding:10px 12px;cursor:pointer;outline:none}
+.share:hover,.share:focus{background:#2a2218}
+.share .sl{color:var(--gold);font-size:13px;margin-bottom:4px}
+.share .su{font-family:Consolas,monospace;font-size:13px;word-break:break-all;color:var(--txt)}
+.share .sh{margin-top:6px;font-size:12px;color:var(--dim)}
+.share.done{border-style:solid;border-color:var(--ok)}.share.done .sh{color:var(--ok)}
 .tabs{max-width:980px;margin:0 auto 12px;display:flex;gap:6px}
 .tabs button{padding:8px 18px;font-size:15px}
 .cards{max-width:980px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -75,6 +81,7 @@ button:hover{border-color:var(--gold)}button.on{background:#3b2f14;border-color:
 <div class="tabs"><button id="tabCalc"></button><button id="tabSrc"></button></div>
 <div id="viewCalc">
 <div class="trees" id="trees"></div>
+<div class="share" id="share" tabindex="0" role="button"><div class="sl" id="shareLabel"></div><div class="su" id="shareUrl"></div><div class="sh" id="shareHint"></div></div>
 <div class="note" id="note"></div>
 </div>
 <div id="viewSrc" hidden></div>
@@ -138,13 +145,13 @@ const P = [
 const BY = Object.fromEntries(P.map(p=>[p.id,p]));
 
 const UI = {
- en:{tabCalc:"Perk calculator",tabSrc:"How to earn points",title:"WoW Forever — Legacy Perks Calculator",pts:"Points spent",reset:"Reset all",
+ en:{shareLabel:"Link to your build (updates with every change)",shareHint:"Click to copy",copied:"Copied to clipboard ✓",tabCalc:"Perk calculator",tabSrc:"How to earn points",title:"WoW Forever — Legacy Perks Calculator",pts:"Points spent",reset:"Reset all",
   trees:["Adventure","Professions","Resourcefulness"],rank:"Rank",
   tier:"Requires {n} points in earlier rows of {tree}",dep:"Requires {p} points in {name}",
   hint:"Left click: add · Right click / Shift+click / long press: remove",
   note:"Legacy Points are earned account-wide (up to 65); each character can spend up to 16 at launch. Rows unlock by points spent in the earlier rows of the same tree. Language switching never changes your spent points. Icons load from the Wowhead CDN (backup: Talents Forever); if one is missing, an emoji is shown instead.",
   confirm:"Reset all spent points?"},
- ru:{tabCalc:"Калькулятор перков",tabSrc:"За что дают очки",title:"WoW Forever — калькулятор перков Legacy",pts:"Потрачено очков",reset:"Сбросить всё",
+ ru:{shareLabel:"Ссылка на ваш билд (обновляется при каждом изменении)",shareHint:"Нажмите, чтобы скопировать",copied:"Скопировано в буфер обмена ✓",tabCalc:"Калькулятор перков",tabSrc:"За что дают очки",title:"WoW Forever — калькулятор перков Legacy",pts:"Потрачено очков",reset:"Сбросить всё",
   trees:["Приключения","Профессии","Находчивость"],rank:"Ранг",
   tier:"Нужно {n} очков в предыдущих рядах: {tree}",dep:"Нужно {p} очк. в перке «{name}»",
   hint:"ЛКМ: добавить · ПКМ / Shift+клик / долгое нажатие: убрать",
@@ -208,6 +215,19 @@ let lang="en", tab="calc", ranks={};
 try{const s=JSON.parse(localStorage.getItem("wfLegacy")||"{}");if(s.l)lang=s.l;if(s.t)tab=s.t;if(s.r)ranks=s.r}catch(e){}
 P.forEach(p=>{ranks[p.id]=Math.min(ranks[p.id]||0,p.max)});
 
+// Build code: one digit per perk (in the order of the P array), e.g. #b=500000...
+const encodeBuild=r=>P.map(p=>r[p.id]).join("");
+function decodeBuild(str){
+  const m=/^#b=(\d+)$/.exec(str||"");if(!m||m[1].length!==P.length)return null;
+  const r={};for(let i=0;i<P.length;i++){const v=+m[1][i];if(v>P[i].max)return null;r[P[i].id]=v}
+  return valid(r)?r:null;
+}
+const buildLink=()=>location.href.split("#")[0]+(total(ranks)?"#b="+encodeBuild(ranks):"");
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true}catch(e){
+    const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();
+    let ok=false;try{ok=document.execCommand("copy")}catch(e2){}a.remove();return ok}
+}
 const total=r=>P.reduce((s,p)=>s+r[p.id],0);
 const before=(t,tier,r)=>P.filter(p=>p.t===t&&p.tier<tier).reduce((s,p)=>s+r[p.id],0);
 const rowOf=p=>p.tier;
@@ -258,6 +278,9 @@ function render(){
   $("bReset").textContent=U.reset;
   $("bEn").classList.toggle("on",lang==="en");$("bRu").classList.toggle("on",lang==="ru");
   $("note").textContent=U.note;
+  $("shareLabel").textContent=U.shareLabel;$("shareUrl").textContent=buildLink();
+  $("shareHint").textContent=$("share").classList.contains("done")?U.copied:U.shareHint;
+  try{history.replaceState(null,"",total(ranks)?"#b="+encodeBuild(ranks):location.pathname+location.search)}catch(e){}
   document.querySelectorAll(".tree").forEach(box=>{const t=+box.dataset.t;
     box.querySelector("b").textContent=U.trees[t];
     box.querySelector("span").textContent=P.filter(p=>p.t===t).reduce((s,p)=>s+ranks[p.id],0)+(lang==="ru"?" оч.":" pts");
@@ -315,11 +338,16 @@ trees.addEventListener("touchstart",e=>{const n=e.target.closest(".node");if(!n)
 trees.addEventListener("click",e=>{if(lpDone){e.stopImmediatePropagation();lpDone=false}},true);
 $("tabCalc").onclick=()=>{tab="calc";render()};
 $("tabSrc").onclick=()=>{tab="src";tip.style.display="none";render()};
+const doCopy=async()=>{if(await copyText(buildLink())){const sh=$("share");sh.classList.add("done");render();setTimeout(()=>{sh.classList.remove("done");render()},1800)}};
+$("share").onclick=doCopy;
+$("share").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();doCopy()}};
+window.addEventListener("hashchange",()=>{const r=decodeBuild(location.hash);if(r){ranks=r;render()}});
 $("bReset").onclick=()=>{if(total(ranks)===0||confirm(UI[lang].confirm)){P.forEach(p=>ranks[p.id]=0);render()}};
 $("bEn").onclick=()=>{lang="en";render()};   // language only changes labels; `ranks` is untouched
 $("bRu").onclick=()=>{lang="ru";render()};
 
 if(!valid(ranks))P.forEach(p=>ranks[p.id]=0);
+{const fromLink=decodeBuild(location.hash);if(fromLink)ranks=fromLink}
 build();render();
 </script>
 </body>
